@@ -1,3 +1,4 @@
+// lib/twitter/auth.ts
 "use client"
 
 import type { TwitterUser } from "./types"
@@ -9,7 +10,7 @@ export class TwitterAuth {
 
   // Check if we're in demo/mock mode
   private static isDemoMode(): boolean {
-    return this.CLIENT_ID === "demo-client-id"
+    return this.CLIENT_ID === "demo-client-id" || !this.CLIENT_ID || this.CLIENT_ID.startsWith("demo")
   }
 
   static generateAuthUrl(): string {
@@ -22,16 +23,17 @@ export class TwitterAuth {
       return `${this.REDIRECT_URI}?code=mock-auth-code&state=${mockState}`
     }
 
-    // Real Twitter OAuth flow
+    // Real Twitter OAuth flow with PKCE
     const authUrl = new URL("https://twitter.com/i/oauth2/authorize")
     const state = this.generateRandomState()
+    const codeChallenge = "challenge" // In production, generate proper PKCE challenge
 
     authUrl.searchParams.set("response_type", "code")
     authUrl.searchParams.set("client_id", this.CLIENT_ID)
     authUrl.searchParams.set("redirect_uri", this.REDIRECT_URI)
     authUrl.searchParams.set("scope", "tweet.read users.read offline.access")
     authUrl.searchParams.set("state", state)
-    authUrl.searchParams.set("code_challenge", "challenge")
+    authUrl.searchParams.set("code_challenge", codeChallenge)
     authUrl.searchParams.set("code_challenge_method", "plain")
 
     // Store state for verification
@@ -93,9 +95,27 @@ export class TwitterAuth {
       return mockUsers[Math.floor(Math.random() * mockUsers.length)]
     }
 
-    // Real implementation would be a server-side API call
-    // to exchange the authorization code for an access token and fetch user data
-    throw new Error("Real Twitter OAuth not implemented - server-side integration required")
+    // Real implementation: call your server-side API
+    const response = await fetch('/api/auth/twitter/callback', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ code, state }),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.error || 'Authentication failed')
+    }
+
+    const data = await response.json()
+    
+    if (!data.success) {
+      throw new Error(data.error || 'Authentication failed')
+    }
+
+    return data.user
   }
 
   static storeUserData(user: TwitterUser): void {

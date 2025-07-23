@@ -1,8 +1,10 @@
+// app/auth/twitter/callback/page.tsx
 "use client"
 
 import { useEffect } from "react"
 import { useSearchParams } from "next/navigation"
 import { Loader2 } from "lucide-react"
+import { TwitterAuth } from "@/lib/twitter/auth"
 
 export default function TwitterCallbackPage() {
   const searchParams = useSearchParams()
@@ -21,18 +23,18 @@ export default function TwitterCallbackPage() {
         },
         window.location.origin,
       )
+      window.close()
       return
     }
 
     if (code && state) {
-      // In a real implementation, you would:
-      // 1. Verify the state parameter
-      // 2. Exchange the code for an access token
-      // 3. Fetch user profile from Twitter API
-
-      // Simulate API call to exchange code for user data
-      exchangeCodeForUser(code, state)
+      // Use the TwitterAuth class to handle the code exchange
+      TwitterAuth.exchangeCodeForUser(code, state)
         .then((user) => {
+          // Store user data
+          TwitterAuth.storeUserData(user)
+          
+          // Send success message to parent window
           window.opener?.postMessage(
             {
               type: "TWITTER_AUTH_SUCCESS",
@@ -40,8 +42,12 @@ export default function TwitterCallbackPage() {
             },
             window.location.origin,
           )
+          
+          // Close the popup
+          window.close()
         })
         .catch((error) => {
+          console.error('Twitter auth error:', error)
           window.opener?.postMessage(
             {
               type: "TWITTER_AUTH_ERROR",
@@ -49,7 +55,18 @@ export default function TwitterCallbackPage() {
             },
             window.location.origin,
           )
+          window.close()
         })
+    } else {
+      // No code or state, something went wrong
+      window.opener?.postMessage(
+        {
+          type: "TWITTER_AUTH_ERROR",
+          error: "Missing authorization code or state",
+        },
+        window.location.origin,
+      )
+      window.close()
     }
   }, [searchParams])
 
@@ -61,21 +78,4 @@ export default function TwitterCallbackPage() {
       </div>
     </div>
   )
-}
-
-async function exchangeCodeForUser(code: string, state: string) {
-  // In a real implementation, this would be a server-side API call
-  // to exchange the authorization code for an access token and fetch user data
-
-  // Simulate API delay
-  await new Promise((resolve) => setTimeout(resolve, 1500))
-
-  // Mock user data (in real app, this comes from Twitter API)
-  return {
-    id: "123456789",
-    username: "johndoe",
-    name: "John Doe",
-    profile_image_url: "/placeholder.svg?height=100&width=100&text=JD",
-    verified: false,
-  }
 }
