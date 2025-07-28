@@ -1,11 +1,25 @@
+"use client"
+
 import { Button } from "@/components/ui/button"
+import { useEffect } from "react"
+import { useAccount } from "wagmi"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { ArrowRight, Twitter, Zap, Shield, Users, TrendingUp, Bot, Wallet } from "lucide-react"
 import Link from "next/link"
 import { Navbar } from "@/components/navbar"
+import { useUserProfile } from "@/hooks/use-tip-protocol" 
 
 export default function LandingPage() {
+  const { address, isConnected } = useAccount()
+  const { isRegistered, profile } = useUserProfile(address)
+
+  useEffect(() => {
+    if (isConnected && isRegistered && profile) {
+      console.log("Registered user detected on homepage, redirecting to dashboard");
+      window.location.href = "/dashboard";
+    }
+  }, [isConnected, isRegistered, profile]);
   return (
     <div className="min-h-screen bg-background">
       {/* Navigation */}

@@ -22,6 +22,6 @@
       "@/*": ["./*"]
     }
   },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts", "bot/config.js", "bot/contract-client.js", "bot/index.js", "bot/twitter-client.js"],
   "exclude": ["node_modules"]
 }
