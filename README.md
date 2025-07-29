@@ -1,4 +1,4 @@
-# 🚀 TipMe Protocol
+# 🚀 TipProtocol
 Seamless crypto tipping for content creators, directly from Twitter
 
 ## 🎯 Problem
