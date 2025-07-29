@@ -19,11 +19,11 @@ const MORPH_HOLESKY_CHAIN_ID = 2810;
 
 // YOU MUST REPLACE THIS WITH YOUR ACTUAL DEPLOYED USDT CONTRACT ADDRESS ON MORPH HOLESKY
 export const USDT_CONTRACT_ADDRESS: `0x${string}` =
-  "0xc727E73CCD6B6Dd1eB524d6e24d7CbC9FE15CdEc"; 
+  "0xC111f83472454148399F7cB4090B8E2B39fb1541"; 
 // Bot's authorized operator address (from your bot/config.ts)
 // This should be the public address of the wallet your bot uses to send transactions
 export const BOT_OPERATOR_ADDRESS: `0x${string}` =
-  "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"; // Replace with your bot's wallet address
+  "0xa4f7e9da12136de291aF8653395F926DA53496Fe"; // Replace with your bot's wallet address
 
 // --- Custom ERC20 ABI for USDT ---
 // Only include the functions we need for interacting with USDT (decimals, approve, allowance)
@@ -158,13 +158,19 @@ export function useTipProtocol() {
     query: { enabled: isConnected && !!userAddress },
   });
 
-  const { data: usdtProtocolBalance, refetch: refetchUsdtProtocolBalance } = useReadContract({
+  const { data: usdtProtocolBalance, refetch: refetchUsdtProtocolBalance, error: balanceError } = useReadContract({
     address: TIP_PROTOCOL_ADDRESS,
     abi: TIP_PROTOCOL_ABI,
     functionName: "getBalance",
     args: userAddress ? [userAddress, USDT_CONTRACT_ADDRESS] : undefined,
-    query: { enabled: isConnected && !!userAddress },
+    query: { 
+      enabled: isConnected && !!userAddress,
+      // Add retry logic
+      retry: 3,
+      retryDelay: 1000,
+    },
   });
+
 
   const { data: isBotAuthorized, refetch: refetchBotAuthorization } =
     useReadContract({
@@ -298,21 +304,163 @@ export function useTipProtocol() {
     amountUsdt: string,
     message: string = ""
   ) => {
-    if (!usdtDecimals) {
-      toast.error("USDT decimals not loaded yet. Please wait or refresh.");
-      return;
+    console.group("🚀 STARTING TIP TRANSACTION");
+    
+    try {
+      // 1. Validate inputs first
+      const normalizedHandle = creatorTwitterHandle.trim().replace(/^@/, "");
+      console.log("📝 Input validation:", {
+        originalHandle: creatorTwitterHandle,
+        normalizedHandle,
+        amount: amountUsdt,
+        message: message.substring(0, 50) + (message.length > 50 ? "..." : ""),
+        userIsTipper: currentUserProfile?.isTipper,
+        userBalance: currentUsdtProtocolBalance
+      });
+  
+      // 2. Pre-flight checks
+      if (!userAddress) {
+        throw new Error("Wallet not connected");
+      }
+  
+      if (!currentUserProfile?.isTipper) {
+        throw new Error("You must be registered as a tipper to send tips");
+      }
+  
+      if (!normalizedHandle || !/^[a-zA-Z0-9_]{1,15}$/.test(normalizedHandle)) {
+        throw new Error("Invalid Twitter handle format. Use only letters, numbers, and underscores (max 15 characters)");
+      }
+  
+      const tipAmount = parseFloat(amountUsdt);
+      if (isNaN(tipAmount) || tipAmount <= 0) {
+        throw new Error("Tip amount must be a positive number");
+      }
+  
+      if (tipAmount < 0.01) {
+        throw new Error("Minimum tip amount is 0.01 USDT");
+      }
+  
+      const userBalance = parseFloat(currentUsdtProtocolBalance);
+      if (tipAmount > userBalance) {
+        throw new Error(`Insufficient balance. You have ${userBalance} USDT, trying to tip ${tipAmount} USDT`);
+      }
+  
+      // 3. Check USDT decimals
+      if (!usdtDecimals) {
+        console.error("USDT decimals not loaded");
+        toast.error("USDT decimals not loaded yet. Please wait or refresh.");
+        throw new Error("USDT decimals not loaded");
+      }
+  
+      // 4. Convert amount to Wei
+      const amountInWei = parseUnits(amountUsdt, usdtDecimals);
+      console.log("💰 Amount conversion:", {
+        inputAmount: amountUsdt,
+        decimals: usdtDecimals,
+        amountInWei: amountInWei.toString()
+      });
+  
+      // 5. Check if recipient exists (optional pre-check)
+      // You might want to add a function to check if creator exists before tipping
+      console.log("🎯 Attempting to tip creator:", {
+        handle: normalizedHandle,
+        token: USDT_CONTRACT_ADDRESS,
+        amount: amountInWei.toString(),
+        message: message
+      });
+  
+      // 6. Execute the transaction
+      await handleTransaction(
+        () => writeTipProtocol({
+          address: TIP_PROTOCOL_ADDRESS,
+          abi: TIP_PROTOCOL_ABI,
+          functionName: "tipCreator",
+          args: [normalizedHandle, USDT_CONTRACT_ADDRESS, amountInWei, message],
+        }),
+        `Tipping ${amountUsdt} USDT to @${normalizedHandle} initiated!`
+      );
+  
+      console.log("✅ Tip transaction initiated successfully");
+  
+    } catch (error: any) {
+      console.error("❌ Tip transaction failed:", error);
+      
+      // Enhanced error analysis
+      let errorMessage = "Failed to send tip";
+      
+      if (error.message) {
+        if (error.message.includes("Not a registered creator")) {
+          errorMessage = `@${normalizedHandle} is not registered as a creator yet`;
+        } else if (error.message.includes("Creator not found")) {
+          errorMessage = `Creator @${normalizedHandle} not found. Check the spelling.`;
+        } else if (error.message.includes("Cannot tip yourself")) {
+          errorMessage = "You cannot tip yourself";
+        } else if (error.message.includes("Insufficient balance")) {
+          errorMessage = "Insufficient USDT balance in Tip Protocol";
+        } else if (error.message.includes("Token not supported")) {
+          errorMessage = "USDT token not supported (configuration error)";
+        } else if (error.message.includes("user rejected")) {
+          errorMessage = "Transaction was rejected in your wallet";
+        } else if (error.message.includes("insufficient funds")) {
+          errorMessage = "Insufficient gas funds to complete transaction";
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      toast.error(errorMessage);
+      throw error; // Re-throw for component to handle
+      
+    } finally {
+      console.groupEnd();
     }
-    const amountInWei = parseUnits(amountUsdt, usdtDecimals);
+  };
 
-    await handleTransaction(
-      () => writeTipProtocol({
+  const debugBalanceIssue = () => {
+    console.group("🔍 BALANCE DEBUG INFO");
+    console.log("Raw usdtProtocolBalance from contract:", usdtProtocolBalance?.toString());
+    console.log("USDT Decimals:", usdtDecimals);
+    console.log("Formatted currentUsdtProtocolBalance:", currentUsdtProtocolBalance);
+    console.log("User Address:", userAddress);
+    console.log("USDT Contract Address:", USDT_CONTRACT_ADDRESS);
+    console.log("Tip Protocol Address:", TIP_PROTOCOL_ADDRESS);
+    
+    // Check if the contract read is working
+    console.log("Contract read status:", {
+      hasBalance: usdtProtocolBalance !== undefined,
+      hasDecimals: usdtDecimals !== undefined,
+      balanceIsZero: usdtProtocolBalance === 0n,
+      balanceValue: usdtProtocolBalance,
+    });
+    
+    console.groupEnd();
+  };
+  
+  useEffect(() => {
+    if (balanceError) {
+      console.error("Error reading USDT Protocol balance:", balanceError);
+      toast.error("Failed to read USDT balance from contract");
+    }
+  }, [balanceError]);
+
+  // Also add this helper function to check if a creator exists before tipping
+  const checkCreatorExists = async (twitterHandle: string): Promise<boolean> => {
+    try {
+      const normalizedHandle = twitterHandle.trim().replace(/^@/, "");
+      
+      // Try to get creator from unified system first
+      const { data: creatorData } = await useReadContract({
         address: TIP_PROTOCOL_ADDRESS,
         abi: TIP_PROTOCOL_ABI,
-        functionName: "tipCreator",
-        args: [creatorTwitterHandle, USDT_CONTRACT_ADDRESS, amountInWei, message],
-      }),
-      `Tipping ${amountUsdt} USDT to @${creatorTwitterHandle} initiated!`
-    );
+        functionName: "getCreatorByTwitter",
+        args: [normalizedHandle],
+      });
+      
+      return creatorData && creatorData[0] !== "0x0000000000000000000000000000000000000000";
+    } catch (error) {
+      console.error("Error checking creator existence:", error);
+      return false;
+    }
   };
 
   // --- Balance Management ---
@@ -818,6 +966,7 @@ export function useTipProtocol() {
     becomeTipper,
     // Tipping
     tipCreator,
+    debugBalanceIssue,
     // Balances
     usdtProtocolBalance: currentUsdtProtocolBalance,
     usdtWalletBalance: currentUsdtWalletBalance,

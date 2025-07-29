@@ -1,25 +1,25 @@
-// components/dashboard/tabs/DashboardTab.tsx
-"use client";
+"use client"
 
-import { QuickStats } from "../QuickStats";
-import { ActivityChart } from "../ActivityChart";
-import { QuickTipCard } from "../QuickTipCard";
-import { RecentActivity } from "../RecentActivity";
+import { QuickStats } from "../QuickStats"
+import { ActivityChart } from "../ActivityChart"
+import { QuickTipCard } from "../QuickTipCard"
+import { RecentActivity } from "../RecentActivity"
 
 interface DashboardTabProps {
-  usdtBalance: string;
-  currentUserProfile: any;
-  isBotAuthorized: boolean;
-  currentDailySpent: string;
-  currentSpendingLimit: string;
-  isLoading: boolean;
-  isTipper: boolean;
-  recentTips: any[];
-  recentDeposits: any[];
-  recentWithdrawals: any[];
-  onTip: (handle: string, amount: string, message: string) => Promise<void>;
-  onBecomeTipper: () => Promise<void>;
-  onRefreshBotStatus?: () => Promise<void>;
+  usdtBalance: string
+  currentUserProfile: any
+  isBotAuthorized: boolean
+  currentDailySpent: string
+  currentSpendingLimit: string
+  isLoading: boolean
+  isTipper: boolean
+  recentTips: any[]
+  recentDeposits: any[]
+  recentWithdrawals: any[]
+  onTip: (handle: string, amount: string, message: string) => Promise<void>
+  onBecomeTipper: () => Promise<void>
+  onRefreshBotStatus?: () => Promise<void>
+  onDebugBalance?: () => Promise<void>
 }
 
 export function DashboardTab({
@@ -35,15 +35,16 @@ export function DashboardTab({
   recentWithdrawals,
   onRefreshBotStatus,
   onTip,
+  onDebugBalance,
   onBecomeTipper,
 }: DashboardTabProps) {
-  const allActivities = [...recentTips, ...recentDeposits, ...recentWithdrawals];
+  const allActivities = [...recentTips, ...recentDeposits, ...recentWithdrawals]
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 sm:space-y-8">
       <div>
-        <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
-        <p className="text-muted-foreground">Welcome back! Here's your tipping overview.</p>
+        <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Dashboard</h1>
+        <p className="text-muted-foreground mt-1">Welcome back! Here's your tipping overview.</p>
       </div>
 
       <QuickStats
@@ -56,20 +57,15 @@ export function DashboardTab({
         currentDailySpent={currentDailySpent}
         currentSpendingLimit={currentSpendingLimit}
         isLoading={isLoading}
-        onRefreshBotStatus={onRefreshBotStatus} 
+        onRefreshBotStatus={onRefreshBotStatus}
       />
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
         <ActivityChart />
-        <QuickTipCard
-          isTipper={isTipper}
-          isLoading={isLoading}
-          onTip={onTip}
-          onBecomeTipper={onBecomeTipper}
-        />
+        <QuickTipCard isTipper={isTipper} isLoading={isLoading} onTip={onTip} onBecomeTipper={onBecomeTipper} debugBalance={onDebugBalance} usdtBalance={usdtBalance} />
       </div>
 
       <RecentActivity activities={allActivities} />
     </div>
-  );
+  )
 }

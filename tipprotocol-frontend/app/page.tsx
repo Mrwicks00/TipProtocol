@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { ArrowRight, Twitter, Zap, Shield, Users, TrendingUp, Bot, Wallet } from "lucide-react"
 import Link from "next/link"
 import { Navbar } from "@/components/navbar"
-import { useUserProfile } from "@/hooks/use-tip-protocol" 
+import { useUserProfile } from "@/hooks/use-tip-protocol"
 
 export default function LandingPage() {
   const { address, isConnected } = useAccount()
@@ -16,10 +16,11 @@ export default function LandingPage() {
 
   useEffect(() => {
     if (isConnected && isRegistered && profile) {
-      console.log("Registered user detected on homepage, redirecting to dashboard");
-      window.location.href = "/dashboard";
+      console.log("Registered user detected on homepage, redirecting to dashboard")
+      window.location.href = "/dashboard"
     }
-  }, [isConnected, isRegistered, profile]);
+  }, [isConnected, isRegistered, profile])
+
   return (
     <div className="min-h-screen bg-background">
       {/* Navigation */}
@@ -28,30 +29,37 @@ export default function LandingPage() {
       {/* Hero Section */}
       <section className="relative overflow-hidden bg-gradient-to-br from-muted/50 to-background">
         <div className="absolute inset-0 bg-grid-pattern opacity-5"></div>
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-24">
           <div className="text-center">
             <Badge className="mb-6 bg-green-100 text-green-800 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-400 dark:border-green-500/50">
               <Bot className="w-4 h-4 mr-2" />
               Twitter Bot Integration
             </Badge>
-            <h1 className="text-5xl md:text-6xl font-bold text-foreground mb-6">
+            <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-foreground mb-6">
               Tip Your Favorite
               <span className="block text-transparent bg-clip-text bg-gradient-to-r from-green-500 to-green-600">
                 Creators Seamlessly
               </span>
             </h1>
-            <p className="text-xl text-muted-foreground mb-8 max-w-3xl mx-auto">
+            <p className="text-lg sm:text-xl text-muted-foreground mb-8 max-w-3xl mx-auto">
               Send tips to content creators instantly via Twitter bot integration. Gasless transactions, multi-token
               support, and unified profiles make tipping effortless.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Link href="/auth">
-                <Button size="lg" className="bg-green-500 hover:bg-green-600 text-white px-8 py-3 neon-glow">
+                <Button
+                  size="lg"
+                  className="bg-green-500 hover:bg-green-600 text-white px-8 py-3 neon-glow w-full sm:w-auto"
+                >
                   Get Started
                   <ArrowRight className="ml-2 w-5 h-5" />
                 </Button>
               </Link>
-              <Button size="lg" variant="outline" className="px-8 py-3 border-border hover:bg-muted bg-transparent">
+              <Button
+                size="lg"
+                variant="outline"
+                className="px-8 py-3 border-border hover:bg-muted bg-transparent w-full sm:w-auto"
+              >
                 Learn More
               </Button>
             </div>
@@ -60,61 +68,61 @@ export default function LandingPage() {
       </section>
 
       {/* Features Section */}
-      <section id="features" className="py-24 bg-background">
+      <section id="features" className="py-16 sm:py-24 bg-background">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
+          <div className="text-center mb-12 sm:mb-16">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-foreground mb-4">
               Powerful Features for Modern Tipping
             </h2>
-            <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+            <p className="text-lg sm:text-xl text-muted-foreground max-w-2xl mx-auto">
               Built for creators and supporters who want seamless, secure, and social tipping experiences.
             </p>
           </div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8">
             <Card className="border-border shadow-lg hover:shadow-xl transition-all duration-300 group hover-lift bg-card">
-              <CardContent className="p-8 text-center">
+              <CardContent className="p-6 sm:p-8 text-center">
                 <div className="w-16 h-16 bg-gradient-to-br from-green-400 to-green-600 rounded-2xl flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform neon-glow">
                   <Twitter className="w-8 h-8 text-white" />
                 </div>
-                <h3 className="text-xl font-semibold text-card-foreground mb-4">Twitter Bot Integration</h3>
-                <p className="text-muted-foreground">
+                <h3 className="text-lg sm:text-xl font-semibold text-card-foreground mb-4">Twitter Bot Integration</h3>
+                <p className="text-muted-foreground text-sm sm:text-base">
                   Just tag @TipBot to send tips instantly. No complex interfaces or additional apps needed.
                 </p>
               </CardContent>
             </Card>
 
             <Card className="border-border shadow-lg hover:shadow-xl transition-all duration-300 group hover-lift bg-card">
-              <CardContent className="p-8 text-center">
+              <CardContent className="p-6 sm:p-8 text-center">
                 <div className="w-16 h-16 bg-gradient-to-br from-green-400 to-green-600 rounded-2xl flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform neon-glow">
                   <Zap className="w-8 h-8 text-white" />
                 </div>
-                <h3 className="text-xl font-semibold text-card-foreground mb-4">Gasless Transactions</h3>
-                <p className="text-muted-foreground">
+                <h3 className="text-lg sm:text-xl font-semibold text-card-foreground mb-4">Gasless Transactions</h3>
+                <p className="text-muted-foreground text-sm sm:text-base">
                   No gas fees, we handle the blockchain complexity. Focus on supporting creators, not transaction costs.
                 </p>
               </CardContent>
             </Card>
 
             <Card className="border-border shadow-lg hover:shadow-xl transition-all duration-300 group hover-lift bg-card">
-              <CardContent className="p-8 text-center">
+              <CardContent className="p-6 sm:p-8 text-center">
                 <div className="w-16 h-16 bg-gradient-to-br from-green-400 to-green-600 rounded-2xl flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform neon-glow">
                   <Wallet className="w-8 h-8 text-white" />
                 </div>
-                <h3 className="text-xl font-semibold text-card-foreground mb-4">Multi-Token Support</h3>
-                <p className="text-muted-foreground">
+                <h3 className="text-lg sm:text-xl font-semibold text-card-foreground mb-4">Multi-Token Support</h3>
+                <p className="text-muted-foreground text-sm sm:text-base">
                   Tip with ETH, USDC, and other supported tokens. Choose the currency that works best for you.
                 </p>
               </CardContent>
             </Card>
 
             <Card className="border-border shadow-lg hover:shadow-xl transition-all duration-300 group hover-lift bg-card">
-              <CardContent className="p-8 text-center">
+              <CardContent className="p-6 sm:p-8 text-center">
                 <div className="w-16 h-16 bg-gradient-to-br from-green-400 to-green-600 rounded-2xl flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform neon-glow">
                   <Users className="w-8 h-8 text-white" />
                 </div>
-                <h3 className="text-xl font-semibold text-card-foreground mb-4">Unified Profiles</h3>
-                <p className="text-muted-foreground">
+                <h3 className="text-lg sm:text-xl font-semibold text-card-foreground mb-4">Unified Profiles</h3>
+                <p className="text-muted-foreground text-sm sm:text-base">
                   One account for both tipping and receiving. Switch between creator and supporter modes seamlessly.
                 </p>
               </CardContent>
@@ -124,16 +132,16 @@ export default function LandingPage() {
       </section>
 
       {/* How It Works */}
-      <section id="how-it-works" className="py-24 bg-muted/30">
+      <section id="how-it-works" className="py-16 sm:py-24 bg-muted/30">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">How It Works</h2>
-            <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+          <div className="text-center mb-12 sm:mb-16">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-foreground mb-4">How It Works</h2>
+            <p className="text-lg sm:text-xl text-muted-foreground max-w-2xl mx-auto">
               Four simple steps to start tipping creators on Twitter
             </p>
           </div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8">
             {[
               {
                 step: "01",
@@ -162,15 +170,15 @@ export default function LandingPage() {
             ].map((item, index) => (
               <div key={index} className="relative">
                 <div className="text-center">
-                  <div className="w-20 h-20 bg-background border-4 border-green-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg neon-glow">
-                    <item.icon className="w-8 h-8 text-green-600" />
+                  <div className="w-16 sm:w-20 h-16 sm:h-20 bg-background border-4 border-green-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg neon-glow">
+                    <item.icon className="w-6 sm:w-8 h-6 sm:h-8 text-green-600" />
                   </div>
                   <div className="text-sm font-bold text-green-600 mb-2">STEP {item.step}</div>
-                  <h3 className="text-xl font-semibold text-foreground mb-4">{item.title}</h3>
-                  <p className="text-muted-foreground">{item.description}</p>
+                  <h3 className="text-lg sm:text-xl font-semibold text-foreground mb-4">{item.title}</h3>
+                  <p className="text-muted-foreground text-sm sm:text-base">{item.description}</p>
                 </div>
                 {index < 3 && (
-                  <div className="hidden lg:block absolute top-10 left-full w-full">
+                  <div className="hidden lg:block absolute top-8 sm:top-10 left-full w-full">
                     <ArrowRight className="w-6 h-6 text-green-500 mx-auto" />
                   </div>
                 )}
@@ -181,16 +189,16 @@ export default function LandingPage() {
       </section>
 
       {/* Stats Section */}
-      <section id="stats" className="py-24 bg-background">
+      <section id="stats" className="py-16 sm:py-24 bg-background">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">Growing Community</h2>
-            <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+          <div className="text-center mb-12 sm:mb-16">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-foreground mb-4">Growing Community</h2>
+            <p className="text-lg sm:text-xl text-muted-foreground max-w-2xl mx-auto">
               Join thousands of creators and supporters already using TipProtocol
             </p>
           </div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8">
             {[
               { label: "Total Tips Sent", value: "$2.4M", icon: TrendingUp },
               { label: "Active Creators", value: "12,500", icon: Users },
@@ -198,10 +206,10 @@ export default function LandingPage() {
               { label: "Twitter Integrations", value: "50K+", icon: Twitter },
             ].map((stat, index) => (
               <Card key={index} className="border-border shadow-lg text-center bg-card hover-lift">
-                <CardContent className="p-8">
-                  <stat.icon className="w-12 h-12 text-green-600 mx-auto mb-4" />
-                  <div className="text-3xl font-bold text-card-foreground mb-2">{stat.value}</div>
-                  <div className="text-muted-foreground">{stat.label}</div>
+                <CardContent className="p-6 sm:p-8">
+                  <stat.icon className="w-10 sm:w-12 h-10 sm:h-12 text-green-600 mx-auto mb-4" />
+                  <div className="text-2xl sm:text-3xl font-bold text-card-foreground mb-2">{stat.value}</div>
+                  <div className="text-muted-foreground text-sm sm:text-base">{stat.label}</div>
                 </CardContent>
               </Card>
             ))}
@@ -210,10 +218,10 @@ export default function LandingPage() {
       </section>
 
       {/* CTA Section */}
-      <section className="py-24 bg-gradient-to-br from-green-500 to-green-600 dark:from-green-600 dark:to-green-700">
+      <section className="py-16 sm:py-24 bg-gradient-to-br from-green-500 to-green-600 dark:from-green-600 dark:to-green-700">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h2 className="text-3xl md:text-4xl font-bold text-white mb-6">Ready to Start Tipping?</h2>
-          <p className="text-xl text-green-100 mb-8 max-w-2xl mx-auto">
+          <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-6">Ready to Start Tipping?</h2>
+          <p className="text-lg sm:text-xl text-green-100 mb-8 max-w-2xl mx-auto">
             Join the future of creator support. Connect your wallet and start tipping in minutes.
           </p>
           <Link href="/auth">
@@ -229,10 +237,10 @@ export default function LandingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="bg-muted/50 dark:bg-gray-900 text-foreground py-16">
+      <footer className="bg-muted/50 dark:bg-gray-900 text-foreground py-12 sm:py-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid md:grid-cols-4 gap-8">
-            <div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-8">
+            <div className="sm:col-span-2 md:col-span-1">
               <div className="flex items-center space-x-2 mb-4">
                 <div className="w-8 h-8 bg-gradient-to-br from-green-400 to-green-600 rounded-lg flex items-center justify-center neon-glow">
                   <Zap className="w-5 h-5 text-white" />
@@ -241,6 +249,7 @@ export default function LandingPage() {
               </div>
               <p className="text-muted-foreground">The future of creator tipping on social media.</p>
             </div>
+
             <div>
               <h3 className="font-semibold mb-4">Product</h3>
               <ul className="space-y-2 text-muted-foreground">
@@ -261,6 +270,7 @@ export default function LandingPage() {
                 </li>
               </ul>
             </div>
+
             <div>
               <h3 className="font-semibold mb-4">Support</h3>
               <ul className="space-y-2 text-muted-foreground">
@@ -281,6 +291,7 @@ export default function LandingPage() {
                 </li>
               </ul>
             </div>
+
             <div>
               <h3 className="font-semibold mb-4">Community</h3>
               <ul className="space-y-2 text-muted-foreground">
@@ -302,7 +313,8 @@ export default function LandingPage() {
               </ul>
             </div>
           </div>
-          <div className="border-t border-border mt-12 pt-8 text-center text-muted-foreground">
+
+          <div className="border-t border-border mt-8 sm:mt-12 pt-6 sm:pt-8 text-center text-muted-foreground">
             <p>&copy; 2024 TipProtocol. All rights reserved.</p>
           </div>
         </div>

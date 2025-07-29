@@ -1,8 +1,7 @@
-// components/dashboard/ActivityChart.tsx
-"use client";
+"use client"
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts"
 
 const chartData = [
   { name: "Jan", tips: 400, received: 240 },
@@ -11,13 +10,13 @@ const chartData = [
   { name: "Apr", tips: 278, received: 390 },
   { name: "May", tips: 189, received: 480 },
   { name: "Jun", tips: 239, received: 380 },
-];
+]
 
 export function ActivityChart() {
   return (
     <Card className="bg-card border-border">
       <CardHeader>
-        <CardTitle className="text-card-foreground">Tipping Activity (Mock Data)</CardTitle>
+        <CardTitle className="text-card-foreground text-lg sm:text-xl">Tipping Activity (Mock Data)</CardTitle>
         <CardDescription>Your tips sent and received over time (Requires a subgraph for real data)</CardDescription>
       </CardHeader>
       <CardContent>
@@ -39,5 +38,5 @@ export function ActivityChart() {
         </ResponsiveContainer>
       </CardContent>
     </Card>
-  );
+  )
 }

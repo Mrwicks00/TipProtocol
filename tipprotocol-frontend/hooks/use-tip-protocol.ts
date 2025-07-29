@@ -1,7 +1,7 @@
 "use client"
 
 import { useWriteContract, useWaitForTransactionReceipt, useReadContract } from "wagmi"
-import { useEffect } from "react"
+import { useEffect, useRef } from "react"
 import { parseEther, formatEther } from "viem"
 import { useState } from "react"
 import { TIP_PROTOCOL_ADDRESS, TIP_PROTOCOL_ABI } from "@/lib/contracts/tip-protocol"
@@ -9,64 +9,108 @@ import { TIP_PROTOCOL_ADDRESS, TIP_PROTOCOL_ABI } from "@/lib/contracts/tip-prot
 export function useTipProtocol() {
   const [isLoading, setIsLoading] = useState(false);
   const [currentStep, setCurrentStep] = useState<string>("");
+  const [registrationComplete, setRegistrationComplete] = useState(false);
+  const [botAuthComplete, setBotAuthComplete] = useState(false);
 
-  const { writeContract, data: hash, error, isPending } = useWriteContract();
+  // Use refs to track if operations are in progress
+  const registrationInProgress = useRef(false);
+  const botAuthInProgress = useRef(false);
+
+  const { writeContract, data: hash, error, isPending, reset } = useWriteContract();
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ 
     hash,
-    confirmations: 1 // Wait for at least 1 confirmation
+    confirmations: 1
   });
 
-  // Register user function with better validation
-// In your use-tip-protocol.ts, update the registerUser function:
-const registerUser = async (twitterHandle: string, asCreator: boolean, asTipper: boolean) => {
-  try {
-    setIsLoading(true);
-    setCurrentStep("Preparing registration...");
-    
-    // Validate inputs
-    if (!twitterHandle || twitterHandle.trim() === "") {
-      throw new Error("Twitter handle is required");
-    }
-
-    if (!asCreator && !asTipper) {
-      throw new Error("Must register as either creator or tipper");
-    }
-
-    setCurrentStep("Registering user...");
-    
-    const result = await writeContract({
-      address: TIP_PROTOCOL_ADDRESS,
-      abi: TIP_PROTOCOL_ABI,
-      functionName: "registerUser",
-      args: [twitterHandle.trim(), asCreator, asTipper],
-      gas: BigInt(300000),
-    });
-
-    setCurrentStep("Registration submitted successfully!");
-    return result;
-    
-  } catch (err: any) {
-    console.error("Error registering user:", err);
-    setCurrentStep("");
-    
-    if (err.message?.includes("User rejected")) {
-      throw new Error("Transaction was rejected by user");
-    } else if (err.message?.includes("insufficient funds")) {
-      throw new Error("Insufficient funds for gas fees");
-    } else if (err.message?.includes("already registered")) {
-      throw new Error("User is already registered");
-    } else {
-      throw new Error(err.message || "Registration failed");
-    }
-  } finally {
+  // Reset states when starting new operations
+  const resetStates = () => {
     setIsLoading(false);
     setCurrentStep("");
-  }
-};
-  // Authorize bot function with validation
-  const authorizeBot = async (botOperator: string) => {
+    reset(); // Reset wagmi write contract state
+  };
+
+  const registerUser = async (twitterHandle: string, asCreator: boolean, asTipper: boolean) => {
+    // Prevent multiple simultaneous registration attempts
+    if (registrationInProgress.current) {
+      console.log("Registration already in progress, skipping...");
+      return;
+    }
+
     try {
+      registrationInProgress.current = true;
       setIsLoading(true);
+      setRegistrationComplete(false);
+      setCurrentStep("Preparing registration...");
+      
+      console.log("=== Contract Call Debug ===");
+      console.log("TIP_PROTOCOL_ADDRESS:", TIP_PROTOCOL_ADDRESS);
+      console.log("twitterHandle:", twitterHandle);
+      console.log("asCreator:", asCreator);
+      console.log("asTipper:", asTipper);
+      console.log("==========================");
+      
+      // Validate inputs
+      if (!twitterHandle || twitterHandle.trim() === "") {
+        throw new Error("Twitter handle is required");
+      }
+
+      if (!asCreator && !asTipper) {
+        throw new Error("Must register as either creator or tipper");
+      }
+
+      setCurrentStep("Sending transaction...");
+      
+      const result = await writeContract({
+        address: TIP_PROTOCOL_ADDRESS,
+        abi: TIP_PROTOCOL_ABI,
+        functionName: "registerUser",
+        args: [twitterHandle.trim(), asCreator, asTipper],
+        gas: BigInt(500000),
+      });
+
+      console.log("Registration transaction hash:", result);
+      setCurrentStep("Transaction sent, waiting for confirmation...");
+      return result;
+      
+    } catch (err: any) {
+      console.error("Error registering user:", err);
+      setCurrentStep("");
+      registrationInProgress.current = false;
+      
+      // Better error messages
+      let errorMessage = "Registration failed";
+      
+      if (err.message?.includes("User rejected")) {
+        errorMessage = "Transaction was rejected by user";
+      } else if (err.message?.includes("insufficient funds")) {
+        errorMessage = "Insufficient funds for gas fees";
+      } else if (err.message?.includes("already registered")) {
+        errorMessage = "User is already registered";
+      } else if (err.message?.includes("Twitter handle already taken")) {
+        errorMessage = "Twitter handle is already taken";
+      } else if (err.message?.includes("execution reverted")) {
+        errorMessage = "Contract execution failed - check if handle is already taken";
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      
+      throw new Error(errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const authorizeBot = async (botOperator: string) => {
+    // Prevent multiple simultaneous bot auth attempts
+    if (botAuthInProgress.current) {
+      console.log("Bot authorization already in progress, skipping...");
+      return;
+    }
+
+    try {
+      botAuthInProgress.current = true;
+      setIsLoading(true);
+      setBotAuthComplete(false);
       setCurrentStep("Authorizing bot...");
       
       // Validate bot operator address
@@ -85,7 +129,7 @@ const registerUser = async (twitterHandle: string, asCreator: boolean, asTipper:
         abi: TIP_PROTOCOL_ABI,
         functionName: "authorizeBot",
         args: [botOperator as `0x${string}`],
-        gas: BigInt(100000), // Adjust based on your contract's needs
+        gas: BigInt(100000),
       });
 
       setCurrentStep("Bot authorization submitted...");
@@ -94,80 +138,134 @@ const registerUser = async (twitterHandle: string, asCreator: boolean, asTipper:
     } catch (err: any) {
       console.error("Error authorizing bot:", err);
       setCurrentStep("");
+      botAuthInProgress.current = false;
       throw new Error(err.message || "Bot authorization failed");
     } finally {
       setIsLoading(false);
-      setCurrentStep("");
     }
   };
+
+  // Handle transaction success
+  useEffect(() => {
+    if (isSuccess && hash) {
+      console.log("Transaction confirmed:", hash);
+      
+      if (registrationInProgress.current) {
+        console.log("Registration completed successfully");
+        setRegistrationComplete(true);
+        registrationInProgress.current = false;
+        setCurrentStep("Registration completed!");
+        
+        // Clear the step after a delay
+        setTimeout(() => setCurrentStep(""), 2000);
+      }
+      
+      if (botAuthInProgress.current) {
+        console.log("Bot authorization completed successfully");
+        setBotAuthComplete(true);
+        botAuthInProgress.current = false;
+        setCurrentStep("Bot authorization completed!");
+        
+        // Clear the step after a delay
+        setTimeout(() => setCurrentStep(""), 2000);
+      }
+    }
+  }, [isSuccess, hash]);
+
+  // Handle transaction errors
+  useEffect(() => {
+    if (error) {
+      console.error("Transaction error:", error);
+      registrationInProgress.current = false;
+      botAuthInProgress.current = false;
+      setCurrentStep("");
+    }
+  }, [error]);
 
   return {
     registerUser,
     authorizeBot,
     isLoading: isLoading || isPending || isConfirming,
-    isSuccess,
+    isSuccess: registrationComplete || botAuthComplete,
     error,
     hash,
     currentStep,
+    isPending,
+    isConfirming,
+    registrationComplete,
+    botAuthComplete,
+    resetStates
   };
 }
 
-
-
 // Hook to get user profile
 export function useUserProfile(userAddress?: string) {
-  const { data: profile, isLoading: profileLoading, error: profileError } = useReadContract({
+  const [lastFetchedAddress, setLastFetchedAddress] = useState<string>();
+  
+  // Only fetch when address changes to prevent infinite loops
+  const shouldFetch = userAddress && userAddress !== lastFetchedAddress;
+  
+  const { data: profile, isLoading: profileLoading, error: profileError, refetch: refetchProfile } = useReadContract({
     address: TIP_PROTOCOL_ADDRESS,
     abi: TIP_PROTOCOL_ABI,
     functionName: "getUserProfile",
-    args: userAddress ? [userAddress as `0x${string}`] : undefined,
+    args: shouldFetch ? [userAddress as `0x${string}`] : undefined,
+    query: {
+      enabled: Boolean(shouldFetch),
+      staleTime: 30000, // Cache for 30 seconds
+      refetchOnWindowFocus: false, // Prevent excessive refetching
+    }
   })
 
   const { data: balance, isLoading: balanceLoading, error: balanceError } = useReadContract({
     address: TIP_PROTOCOL_ADDRESS,
     abi: TIP_PROTOCOL_ABI,
     functionName: "getBalance",
-    args: userAddress
+    args: shouldFetch
       ? [userAddress as `0x${string}`, "0x0000000000000000000000000000000000000000" as `0x${string}`]
-      : undefined, // ETH balance
+      : undefined,
+    query: {
+      enabled: Boolean(shouldFetch),
+      staleTime: 30000,
+      refetchOnWindowFocus: false,
+    }
   })
 
-  const { data: isRegistered, isLoading: registeredLoading, error: registeredError } = useReadContract({
+  const { data: isRegistered, isLoading: registeredLoading, error: registeredError, refetch: refetchRegistered } = useReadContract({
     address: TIP_PROTOCOL_ADDRESS,
     abi: TIP_PROTOCOL_ABI,
     functionName: "isRegisteredUser",
-    args: userAddress ? [userAddress as `0x${string}`] : undefined,
+    args: shouldFetch ? [userAddress as `0x${string}`] : undefined,
+    query: {
+      enabled: Boolean(shouldFetch),
+      staleTime: 30000,
+      refetchOnWindowFocus: false,
+    }
   })
 
-  const { data: legacyCreator } = useReadContract({
-    address: TIP_PROTOCOL_ADDRESS,
-    abi: TIP_PROTOCOL_ABI,
-    functionName: "creators",
-    args: userAddress ? [userAddress as `0x${string}`] : undefined,
-  })
-  
-  const { data: legacyTipper } = useReadContract({
-    address: TIP_PROTOCOL_ADDRESS,
-    abi: TIP_PROTOCOL_ABI,
-    functionName: "tippers", 
-    args: userAddress ? [userAddress as `0x${string}`] : undefined,
-  })
-
-  // Debug logging
+  // Update last fetched address when we actually fetch
   useEffect(() => {
-    console.log("=== useUserProfile Debug ===");
-    console.log("userAddress:", userAddress);
-    console.log("profile raw data:", profile);
-    console.log("isRegistered raw data:", isRegistered);
-    console.log("profileLoading:", profileLoading);
-    console.log("registeredLoading:", registeredLoading);
-    console.log("profileError:", profileError);
-    console.log("registeredError:", registeredError);
-    console.log("processed isRegistered:", Boolean(isRegistered));
-    console.log("legacyCreator:", legacyCreator);
-    console.log("legacyTipper:", legacyTipper);
-    console.log("============================");
-  }, [userAddress, profile, isRegistered, profileLoading, legacyCreator, legacyTipper, registeredLoading, profileError, registeredError]);
+    if (shouldFetch) {
+      setLastFetchedAddress(userAddress);
+    }
+  }, [shouldFetch, userAddress]);
+
+  // Method to manually refetch data
+  const refetchUserData = () => {
+    refetchProfile();
+    refetchRegistered();
+  };
+
+  // Debug logging (less frequent)
+  useEffect(() => {
+    if (userAddress && profile !== undefined) {
+      console.log("=== useUserProfile Update ===");
+      console.log("userAddress:", userAddress);
+      console.log("isRegistered:", Boolean(isRegistered));
+      console.log("profile exists:", !!profile);
+      console.log("=============================");
+    }
+  }, [userAddress, profile, isRegistered]);
 
   return {
     profile: profile
@@ -184,9 +282,9 @@ export function useUserProfile(userAddress?: string) {
       : null,
     balance: balance ? formatEther(balance) : "0",
     isRegistered: Boolean(isRegistered),
-    // Add loading states for debugging
     isLoading: profileLoading || registeredLoading,
-    errors: { profileError, balanceError, registeredError }
+    errors: { profileError, balanceError, registeredError },
+    refetchUserData
   }
 }
 
@@ -197,6 +295,11 @@ export function useCreatorByTwitter(twitterHandle?: string) {
     abi: TIP_PROTOCOL_ABI,
     functionName: "getCreatorByTwitter",
     args: twitterHandle ? [twitterHandle] : undefined,
+    query: {
+      enabled: Boolean(twitterHandle),
+      staleTime: 60000, // Cache for 1 minute
+      refetchOnWindowFocus: false,
+    }
   })
 
   return {

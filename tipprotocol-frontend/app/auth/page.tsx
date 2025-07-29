@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAccount } from "wagmi";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent } from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Wallet,
   Twitter,
@@ -23,6 +23,9 @@ import {
   Loader2,
   Bot,
   AlertTriangle,
+  User,
+  CheckCircle,
+  XCircle,
 } from "lucide-react";
 import Link from "next/link";
 import { TwitterAuthComponent } from "@/components/twitter/twitter-auth";
@@ -36,10 +39,32 @@ export default function AuthPage() {
   const [userType, setUserType] = useState("");
   const [twitterHandle, setTwitterHandle] = useState("");
   const [twitterUser, setTwitterUser] = useState<TwitterUser | null>(null);
-  const [dailyLimit, setDailyLimit] = useState("0.05");
+  const [registrationMethod, setRegistrationMethod] = useState<
+    "twitter" | "manual"
+  >("twitter");
+  const [manualHandle, setManualHandle] = useState("");
+
+  // Form validation states
+  const [handleError, setHandleError] = useState("");
+  const [isValidating, setIsValidating] = useState(false);
+  const [verificationResult, setVerificationResult] = useState<any>(null);
+  const botAuthAttempted = useRef(false);
+  const registrationAttempted = useRef(false);
+  const redirectAttempted = useRef(false);
+
   const { address, isConnected, chain } = useAccount();
-  const { registerUser, authorizeBot, isLoading, isSuccess, error } =
-    useTipProtocol();
+  const {
+    registerUser,
+    authorizeBot,
+    isLoading,
+    isSuccess,
+    error,
+    isPending,
+    isConfirming,
+    currentStep,
+    registrationComplete,
+    botAuthComplete,
+  } = useTipProtocol();
   const { isRegistered, profile } = useUserProfile(address);
 
   useEffect(() => {
@@ -48,23 +73,45 @@ export default function AuthPage() {
     console.log("isRegistered:", isRegistered);
     console.log("profile:", profile);
     console.log("address:", address);
-    console.log("Should redirect?", isConnected && isRegistered && profile);
-    console.log("================================");
-    
-    if (isConnected && isRegistered && profile) {
-      console.log("User already registered, redirecting to dashboard");
-      window.location.href = "/dashboard";
-      return;
-    }
-  }, [isConnected, isRegistered, profile, address]);
+    console.log("registrationComplete:", registrationComplete);
+    console.log("redirectAttempted:", redirectAttempted.current);
 
-  // Bot operator address (you'll need to set this to your actual bot's address)
-  const BOT_OPERATOR_ADDRESS = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"; // Replace with actual bot address
+    // ONLY redirect if registration is complete AND not currently processing AND not already attempted
+    if (
+      isConnected &&
+      isRegistered &&
+      profile &&
+      !isLoading &&
+      !isPending &&
+      !isConfirming &&
+      !redirectAttempted.current &&
+      registrationComplete // Use the new state from hook
+    ) {
+      console.log("User registration complete, redirecting to dashboard");
+      redirectAttempted.current = true;
+
+      // Use router instead of window.location for better UX
+      setTimeout(() => {
+        window.location.href = "/dashboard";
+      }, 1000);
+    }
+  }, [
+    isConnected,
+    isRegistered,
+    profile,
+    address,
+    isLoading,
+    isPending,
+    isConfirming,
+    registrationComplete,
+  ]);
+
+  // Bot operator address
+  const BOT_OPERATOR_ADDRESS = "0x40817a62f10068332704cDC3b827EFE588AA8f0D";
 
   // Wait for wallet connection before proceeding
   useEffect(() => {
     if (isConnected && step === 1) {
-      // Small delay to ensure connection is fully established
       const timer = setTimeout(() => {
         setStep(2);
       }, 1000);
@@ -75,62 +122,263 @@ export default function AuthPage() {
   // Check if user is already registered and redirect
   useEffect(() => {
     if (isRegistered && profile) {
-      // User is already registered, redirect to dashboard
-      window.location.href = "/dashboard"
+      window.location.href = "/dashboard";
     }
-  }, [isRegistered, profile])
+  }, [isRegistered, profile]);
+
+  //BOT AUTHORIZATION
+
+  useEffect(() => {
+    const handleBotAuthorization = async () => {
+      if (
+        registrationComplete && // Use registrationComplete instead of isSuccess
+        (userType === "tipper" || userType === "both") &&
+        !error &&
+        !botAuthAttempted.current &&
+        !botAuthComplete // Check if bot auth is not already complete
+      ) {
+        console.log("Registration successful, now authorizing bot...");
+        botAuthAttempted.current = true;
+
+        try {
+          await new Promise((resolve) => setTimeout(resolve, 2000)); // Wait 2 seconds
+          await authorizeBot(BOT_OPERATOR_ADDRESS);
+          console.log("Bot authorization completed");
+        } catch (err) {
+          console.error("Bot authorization failed:", err);
+          // Don't fail the whole registration for bot auth failure
+          alert(
+            "Registration successful, but bot authorization failed. You can authorize it later from dashboard."
+          );
+        }
+      }
+    };
+
+    handleBotAuthorization();
+  }, [registrationComplete, userType, authorizeBot, error, botAuthComplete]);
+
+  // Enhanced Twitter handle validation with security checks
+  const validateTwitterHandle = (
+    handle: string
+  ): { isValid: boolean; error: string; warning?: string } => {
+    const cleanHandle = handle.replace("@", "").trim();
+
+    if (!cleanHandle) {
+      return { isValid: false, error: "Twitter handle is required" };
+    }
+
+    if (cleanHandle.length < 1 || cleanHandle.length > 15) {
+      return {
+        isValid: false,
+        error: "Twitter handle must be 1-15 characters",
+      };
+    }
+
+    if (!/^[a-zA-Z0-9_]+$/.test(cleanHandle)) {
+      return {
+        isValid: false,
+        error:
+          "Twitter handle can only contain letters, numbers, and underscores",
+      };
+    }
+
+    if (/^[0-9]+$/.test(cleanHandle)) {
+      return { isValid: false, error: "Twitter handle cannot be all numbers" };
+    }
+
+    // Check for suspicious patterns
+    const numberCount = (cleanHandle.match(/[0-9]/g) || []).length;
+    if (numberCount > cleanHandle.length * 0.6) {
+      return {
+        isValid: true,
+        error: "",
+        warning:
+          "Handle contains many numbers - make sure this is your real username",
+      };
+    }
+
+    // Check for bot-like patterns
+    const suspiciousWords = ["bot", "fake", "spam", "test123", "user123"];
+    const hasSuspiciousWord = suspiciousWords.some((word) =>
+      cleanHandle.toLowerCase().includes(word)
+    );
+    if (hasSuspiciousWord) {
+      return {
+        isValid: true,
+        error: "",
+        warning:
+          "Handle contains suspicious keywords - ensure this is your real account",
+      };
+    }
+
+    return { isValid: true, error: "" };
+  };
+
+  // Real handle verification (optional enhancement)
+  const verifyHandleExists = async (
+    handle: string
+  ): Promise<{ exists: boolean; verified: boolean; message: string }> => {
+    try {
+      const response = await fetch("/api/verify-twitter-handle", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ handle }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        return {
+          exists: data.available && data.verified,
+          verified: data.verified,
+          message: data.message,
+        };
+      }
+    } catch (error) {
+      console.error("Handle verification failed:", error);
+    }
+
+    return {
+      exists: false,
+      verified: false,
+      message: "Could not verify handle existence",
+    };
+  };
+
+  // Handle manual input validation with enhanced security
+  const handleManualInputChange = async (value: string) => {
+    setManualHandle(value);
+    setHandleError("");
+    setVerificationResult(null);
+
+    if (value.trim()) {
+      const validation = validateTwitterHandle(value);
+      if (!validation.isValid) {
+        setHandleError(validation.error);
+        return;
+      }
+
+      if (validation.warning) {
+        setHandleError(validation.warning);
+      }
+
+      // Optional: Verify handle exists (uncomment to enable)
+      // setIsValidating(true);
+      // try {
+      //   const verification = await verifyHandleExists(value);
+      //   setVerificationResult(verification);
+      //   if (!verification.exists) {
+      //     setHandleError("This Twitter handle does not exist");
+      //   }
+      // } catch (error) {
+      //   console.error('Verification failed:', error);
+      // } finally {
+      //   setIsValidating(false);
+      // }
+    }
+  };
+
+  // Simulate Twitter handle availability check (you'd want to implement real checking)
+  const checkHandleAvailability = async (handle: string) => {
+    setIsValidating(true);
+
+    // Simulate API call delay
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    // For demo purposes, let's say handles with "test" are unavailable
+    const isAvailable = !handle.toLowerCase().includes("test");
+
+    setIsValidating(false);
+    return isAvailable;
+  };
 
   const handleTwitterSuccess = (user: TwitterUser) => {
     setTwitterUser(user);
-    setTwitterHandle(user.username); // Don't add @ here, contract expects without @
+    setTwitterHandle(user.username);
     setTimeout(() => setStep(4), 1000);
   };
 
+  const handleManualSubmit = async () => {
+    const validation = validateTwitterHandle(manualHandle);
+    if (!validation.isValid) {
+      setHandleError(validation.error);
+      return;
+    }
+
+    // Optional: Check if handle is available
+    // const isAvailable = await checkHandleAvailability(manualHandle);
+    // if (!isAvailable) {
+    //   setHandleError("This Twitter handle appears to be taken or invalid");
+    //   return;
+    // }
+
+    setTwitterHandle(manualHandle.replace("@", ""));
+    setStep(4);
+  };
+
   const handleRegisterUser = async () => {
-    if (!twitterHandle || !userType) {
-      console.error("Missing required fields:", { twitterHandle, userType });
+    // Prevent multiple registration attempts
+    if (registrationAttempted.current || isLoading || isPending) {
+      console.log("Registration already in progress or attempted");
+      return;
+    }
+
+    const finalHandle =
+      registrationMethod === "twitter"
+        ? twitterHandle
+        : manualHandle.replace("@", "");
+
+    console.log("=== Registration Debug ===");
+    console.log("finalHandle:", finalHandle);
+    console.log("userType:", userType);
+    console.log("address:", address);
+    console.log("isConnected:", isConnected);
+    console.log("isWrongNetwork:", isWrongNetwork);
+    console.log("========================");
+
+    if (!finalHandle || !userType) {
+      console.error("Missing required fields:", { finalHandle, userType });
+      alert("Please fill in all required fields");
       return;
     }
 
     if (!address || !isConnected) {
       console.error("Wallet not connected");
+      alert("Please connect your wallet first");
       return;
     }
 
     if (isWrongNetwork) {
       console.error("Wrong network - please switch to Morph Holesky");
+      alert("Please switch to Morph Holesky network");
       return;
     }
+
+    registrationAttempted.current = true; // Mark as attempted
 
     try {
       const asCreator = userType === "creator" || userType === "both";
       const asTipper = userType === "tipper" || userType === "both";
 
       console.log("Registration params:", {
-        twitterHandle: twitterHandle.replace("@", ""),
+        twitterHandle: finalHandle,
         asCreator,
         asTipper,
         address,
         chainId: chain?.id,
+        method: registrationMethod,
       });
 
-      // Step 1: Register user on contract
       console.log("Starting user registration...");
-      await registerUser(twitterHandle.replace("@", ""), asCreator, asTipper);
-
-      // Wait for the first transaction to complete before proceeding
-      console.log("User registration successful, waiting for confirmation...");
-
-      // Step 2: If user is a tipper, authorize the bot (only after first tx succeeds)
-      if (asTipper) {
-        console.log("Starting bot authorization...");
-        // Small delay to ensure first transaction is processed
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-        await authorizeBot(BOT_OPERATOR_ADDRESS);
-      }
-    } catch (err) {
+      const registerResult = await registerUser(
+        finalHandle,
+        asCreator,
+        asTipper
+      );
+      console.log("Register result:", registerResult);
+    } catch (err: any) {
       console.error("Registration failed:", err);
-      // Don't throw here, let the hook's error handling manage it
+      registrationAttempted.current = false; // Reset on error
+      alert(`Registration failed: ${err.message || "Unknown error"}`);
     }
   };
 
@@ -287,7 +535,7 @@ export default function AuthPage() {
             </Card>
           </TabsContent>
 
-          {/* Step 3: Twitter Integration */}
+          {/* Step 3: Twitter Integration - Now with Tabs */}
           <TabsContent value="3">
             <Card className="bg-card border-border">
               <CardHeader>
@@ -296,44 +544,203 @@ export default function AuthPage() {
                   Twitter Integration
                 </CardTitle>
                 <CardDescription>
-                  Connect your Twitter account for bot integration
+                  Connect your Twitter account or enter your handle manually
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                <div className="text-center">
-                  <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Twitter className="w-8 h-8 text-blue-500" />
-                  </div>
-                  <h3 className="text-lg font-semibold text-card-foreground mb-2">
-                    Connect Your Twitter Account
-                  </h3>
-                  <p className="text-sm text-muted-foreground mb-6">
-                    We'll use your Twitter profile to set up your TipProtocol
-                    account and enable bot integration.
-                  </p>
-                </div>
+                <Tabs
+                  value={registrationMethod}
+                  onValueChange={(value) =>
+                    setRegistrationMethod(value as "twitter" | "manual")
+                  }
+                >
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger
+                      value="twitter"
+                      className="flex items-center gap-2"
+                    >
+                      <Twitter className="w-4 h-4" />
+                      Twitter Auth
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="manual"
+                      className="flex items-center gap-2"
+                    >
+                      <User className="w-4 h-4" />
+                      Manual Entry
+                      <span className="ml-1 px-1.5 py-0.5 text-xs bg-green-100 text-green-700 rounded">
+                        Working
+                      </span>
+                    </TabsTrigger>
+                  </TabsList>
 
-                <TwitterAuthComponent
-                  onSuccess={handleTwitterSuccess}
-                  onError={(error) => {
-                    console.error("Twitter auth error:", error);
-                  }}
-                />
+                  <TabsContent value="twitter" className="space-y-4">
+                    <div className="text-center">
+                      <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <Twitter className="w-8 h-8 text-blue-500" />
+                      </div>
+                      <h3 className="text-lg font-semibold text-card-foreground mb-2">
+                        Connect Your Twitter Account
+                      </h3>
+                      <p className="text-sm text-muted-foreground mb-6">
+                        We'll use your Twitter profile to set up your
+                        TipProtocol account and enable bot integration.
+                      </p>
+                    </div>
+
+                    <div className="bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800 rounded-lg p-4">
+                      <div className="flex items-start gap-3">
+                        <AlertTriangle className="w-5 h-5 text-orange-600 dark:text-orange-400 mt-0.5" />
+                        <div className="text-sm">
+                          <p className="font-medium text-orange-900 dark:text-orange-100 mb-1">
+                            Currently Under Development
+                          </p>
+                          <p className="text-orange-700 dark:text-orange-300">
+                            Twitter authentication is currently being debugged.
+                            Please use manual entry for a reliable registration
+                            experience.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <TwitterAuthComponent
+                      onSuccess={handleTwitterSuccess}
+                      onError={(error) => {
+                        console.error("Twitter auth error:", error);
+                      }}
+                    />
+                  </TabsContent>
+
+                  <TabsContent value="manual" className="space-y-4">
+                    <div className="text-center">
+                      <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <User className="w-8 h-8 text-green-600" />
+                      </div>
+                      <h3 className="text-lg font-semibold text-card-foreground mb-2">
+                        Enter Your Twitter Handle
+                      </h3>
+                      <p className="text-sm text-muted-foreground mb-6">
+                        Manually enter your Twitter username to continue with
+                        registration.
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="twitter-handle">Twitter Handle</Label>
+                      <div className="relative">
+                        <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground">
+                          @
+                        </div>
+                        <Input
+                          id="twitter-handle"
+                          type="text"
+                          placeholder="yourusername"
+                          value={manualHandle}
+                          onChange={(e) =>
+                            handleManualInputChange(e.target.value)
+                          }
+                          className={`pl-8 ${
+                            handleError ? "border-red-500" : ""
+                          }`}
+                          disabled={isValidating}
+                        />
+                        {isValidating && (
+                          <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                            <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
+                          </div>
+                        )}
+                      </div>
+                      {handleError && (
+                        <div
+                          className={`flex items-center gap-2 text-sm ${
+                            handleError.includes("make sure") ||
+                            handleError.includes("ensure")
+                              ? "text-amber-600"
+                              : "text-red-600"
+                          }`}
+                        >
+                          {handleError.includes("make sure") ||
+                          handleError.includes("ensure") ? (
+                            <AlertTriangle className="w-4 h-4" />
+                          ) : (
+                            <XCircle className="w-4 h-4" />
+                          )}
+                          {handleError}
+                        </div>
+                      )}
+                      {manualHandle && !handleError && !isValidating && (
+                        <div className="flex items-center gap-2 text-green-600 text-sm">
+                          <CheckCircle className="w-4 h-4" />
+                          Valid Twitter handle format
+                          {verificationResult?.verified && (
+                            <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded">
+                              Verified on Twitter
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
+                      <div className="flex items-start gap-3">
+                        <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 mt-0.5" />
+                        <div className="text-sm">
+                          <p className="font-medium text-amber-900 dark:text-amber-100 mb-1">
+                            Security Notice
+                          </p>
+                          <div className="text-amber-700 dark:text-amber-300 space-y-2">
+                            <p>
+                              Please enter your actual Twitter username. Using
+                              someone else's handle may cause:
+                            </p>
+                            <ul className="list-disc list-inside space-y-1 text-xs">
+                              <li>Bot commands not working properly</li>
+                              <li>Tips being sent to the wrong person</li>
+                              <li>Account verification issues</li>
+                              <li>Potential account suspension</li>
+                            </ul>
+                            <p className="text-xs font-medium">
+                              Tip: You can find your username in your Twitter
+                              profile URL: twitter.com/YOUR_USERNAME
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <Button
+                      onClick={handleManualSubmit}
+                      disabled={!manualHandle || !!handleError || isValidating}
+                      className="w-full bg-green-500 hover:bg-green-600 neon-glow"
+                    >
+                      {isValidating ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Validating...
+                        </>
+                      ) : (
+                        <>
+                          Continue with @{manualHandle || "username"}
+                          <ArrowRight className="ml-2 w-4 h-4" />
+                        </>
+                      )}
+                    </Button>
+                  </TabsContent>
+                </Tabs>
 
                 <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
                   <div className="flex items-start gap-3">
                     <AlertCircle className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5" />
                     <div className="text-sm">
                       <p className="font-medium text-blue-900 dark:text-blue-100 mb-1">
-                        What we'll access:
+                        What we'll use this for:
                       </p>
                       <ul className="text-blue-700 dark:text-blue-300 space-y-1">
-                        <li>
-                          • Your profile information (name, username, profile
-                          picture)
-                        </li>
-                        <li>• Permission to send tips via @TipBot mentions</li>
-                        <li>• Read access to verify your identity</li>
+                        <li>• Link your wallet to your Twitter profile</li>
+                        <li>• Enable @TipBot mentions for sending tips</li>
+                        <li>• Display your profile in the creator directory</li>
+                        <li>• Process tip notifications and confirmations</li>
                       </ul>
                     </div>
                   </div>
@@ -355,7 +762,7 @@ export default function AuthPage() {
               </CardHeader>
               <CardContent className="space-y-6">
                 {/* Show Twitter Profile Preview */}
-                {twitterUser && (
+                {registrationMethod === "twitter" && twitterUser ? (
                   <div className="p-4 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg">
                     <div className="flex items-center gap-3 mb-3">
                       <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-blue-500">
@@ -380,27 +787,29 @@ export default function AuthPage() {
                       This profile will be used throughout TipProtocol
                     </p>
                   </div>
-                )}
-
-                {/* {(userType === "tipper" || userType === "both") && (
-                  <div className="space-y-2">
-                    <Label htmlFor="daily-limit">
-                      Daily Spending Limit (ETH)
-                    </Label>
-                    <Input    
-                      id="daily-limit"
-                      type="number"
-                      step="0.01"
-                      placeholder="0.1"
-                      value={dailyLimit}
-                      onChange={(e) => setDailyLimit(e.target.value)}
-                      className="bg-background border-border"
-                    />
-                    <p className="text-sm text-muted-foreground">
-                      Maximum amount the bot can spend on your behalf per day
+                ) : (
+                  <div className="p-4 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="w-12 h-12 rounded-full bg-green-500 flex items-center justify-center">
+                        <User className="w-6 h-6 text-white" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-green-900 dark:text-green-100">
+                          Manual Registration
+                        </p>
+                        <p className="text-sm text-green-700 dark:text-green-300">
+                          @
+                          {registrationMethod === "manual"
+                            ? manualHandle
+                            : twitterHandle}
+                        </p>
+                      </div>
+                    </div>
+                    <p className="text-sm text-green-700 dark:text-green-300">
+                      Registering with manually entered Twitter handle
                     </p>
                   </div>
-                )} */}
+                )}
 
                 <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg p-4">
                   <div className="flex items-center gap-2 mb-2">
@@ -410,13 +819,24 @@ export default function AuthPage() {
                     </span>
                   </div>
                   <ul className="text-sm text-green-700 dark:text-green-300 space-y-1">
-                    <li>• Twitter: @{twitterHandle}</li>
+                    <li>
+                      • Twitter: @
+                      {registrationMethod === "twitter"
+                        ? twitterHandle
+                        : manualHandle}
+                    </li>
                     <li>
                       • Role:{" "}
                       {userType === "both" ? "Creator & Tipper" : userType}
                     </li>
                     <li>• Network: Morph Holesky</li>
                     <li>• Wallet: {address?.slice(0, 10)}...</li>
+                    <li>
+                      • Method:{" "}
+                      {registrationMethod === "twitter"
+                        ? "Twitter OAuth"
+                        : "Manual Entry"}
+                    </li>
                     {(userType === "tipper" || userType === "both") && (
                       <li>
                         • Bot Integration: Will be enabled after registration
@@ -459,7 +879,7 @@ export default function AuthPage() {
                   </div>
                 )}
 
-                {isSuccess ? (
+                {registrationComplete ? ( 
                   <Link href="/dashboard">
                     <Button className="w-full bg-green-500 hover:bg-green-600 neon-glow">
                       Registration Complete! Go to Dashboard
@@ -469,13 +889,25 @@ export default function AuthPage() {
                 ) : (
                   <Button
                     onClick={handleRegisterUser}
-                    disabled={isLoading || !twitterHandle || !userType}
+                    disabled={
+                      isLoading ||
+                      isPending ||
+                      isConfirming ||
+                      registrationAttempted.current || // ADD THIS CHECK
+                      (!twitterHandle && !manualHandle) ||
+                      !userType
+                    }
                     className="w-full bg-green-500 hover:bg-green-600 neon-glow"
                   >
-                    {isLoading ? (
+                    {isLoading || isPending ? (
                       <>
                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Registering on Contract...
+                        {currentStep || "Preparing transaction..."}
+                      </>
+                    ) : isConfirming ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Confirming registration...
                       </>
                     ) : (
                       <>
