@@ -98,7 +98,7 @@ Tweet: "@Tipprotocolbot tip @creator $amount your message"
 
 ### Supported Tokens
 - **ETH** - Primary tipping currency
-- **USDC** - Stable value for predictable tips
+- **USDT** - Stable value for predictable tips (only supported for now)
 - **MORPH** - Native token with fee discounts
 - **Custom Tokens** - Creators can accept any ERC-20
 - **$TIP Token** (Future) - Users will earn $TIP tokens for activity and can stake them for additional benefits
