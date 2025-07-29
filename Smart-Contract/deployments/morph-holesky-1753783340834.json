@@ -1,0 +1,14 @@
+{
+  "network": "morph-holesky",
+  "contracts": {
+    "USDT": {
+      "address": "0xC111f83472454148399F7cB4090B8E2B39fb1541",
+      "name": "Tether USD",
+      "symbol": "USDT",
+      "decimals": 6,
+      "deployedAt": "2025-07-29T10:02:20.576Z",
+      "deploymentBlock": 19029289,
+      "owner": "0xB24023434c3670E100068C925A87fE8F500d909a"
+    }
+  }
+}
