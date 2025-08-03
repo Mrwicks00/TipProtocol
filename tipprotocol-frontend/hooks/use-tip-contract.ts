@@ -587,209 +587,291 @@ export function useTipProtocol() {
     );
   };
 
-  // --- Event Listeners (for real-time updates) ---
-  const [recentTips, setRecentTips] = useState<TipEvent[]>([]);
-  const [recentDeposits, setRecentDeposits] = useState<DepositWithdrawalEvent[]>([]);
-  const [recentWithdrawals, setRecentWithdrawals] = useState<DepositWithdrawalEvent[]>([]);
+  // Replace the event listeners section in your useTipProtocol hook with this fixed version
 
-  useWatchContractEvent({
-    address: TIP_PROTOCOL_ADDRESS,
-    abi: TIP_PROTOCOL_ABI,
-    eventName: "BalanceDeposited",
-    chainId: MORPH_HOLESKY_CHAIN_ID, // Specify the exact chain
-    // Enable only when user is connected and has address
-    query: { 
-      enabled: isConnected && !!userAddress 
-    },
-    onLogs: (logs) => {
-      console.log("BalanceDeposited event received:", logs.length, "events"); // Debug log
+// --- Event Listeners (for real-time updates) - FIXED VERSION ---
+const [recentTips, setRecentTips] = useState<TipEvent[]>([]);
+const [recentDeposits, setRecentDeposits] = useState<DepositWithdrawalEvent[]>([]);
+const [recentWithdrawals, setRecentWithdrawals] = useState<DepositWithdrawalEvent[]>([]);
+
+// 1. BalanceDeposited Event Listener
+useWatchContractEvent({
+  address: TIP_PROTOCOL_ADDRESS,
+  abi: TIP_PROTOCOL_ABI,
+  eventName: "BalanceDeposited",
+  chainId: MORPH_HOLESKY_CHAIN_ID,
+  query: { 
+    enabled: isConnected && !!userAddress && !!usdtDecimals
+  },
+  onLogs: (logs) => {
+    console.log("🏦 BalanceDeposited events received:", logs.length);
+    
+    const newDeposits = logs
+      .filter((log) => {
+        const args = log.args as {
+          user?: `0x${string}`;
+          token?: `0x${string}`;
+          amount?: bigint;
+        };
+        
+        // Check if this deposit is for the current user and USDT token
+        const isUserMatch = args?.user?.toLowerCase() === userAddress?.toLowerCase();
+        const isTokenMatch = args?.token?.toLowerCase() === USDT_CONTRACT_ADDRESS?.toLowerCase();
+        
+        console.log("Deposit filter check:", {
+          eventUser: args?.user,
+          currentUser: userAddress,
+          eventToken: args?.token,
+          expectedToken: USDT_CONTRACT_ADDRESS,
+          userMatch: isUserMatch,
+          tokenMatch: isTokenMatch
+        });
+        
+        return isUserMatch && isTokenMatch;
+      })
+      .map((log) => {
+        const args = log.args as {
+          user: `0x${string}`;
+          token: `0x${string}`;
+          amount: bigint;
+        };
+        
+        return {
+          type: "deposit" as const,
+          amount: formatUnits(args.amount, usdtDecimals!),
+          token: "USDT",
+          hash: log.transactionHash!,
+          timestamp: new Date().toISOString(),
+        };
+      });
       
-      const newDeposits = logs
-        .map((log) => {
-          console.log("Raw log:", log); // Debug raw log
-          
-          const args = log.args as {
-            user: `0x${string}`;
-            token: `0x${string}`;
-            amount: bigint;
-          };
-          
-          console.log("Processing deposit event args:", args); // Debug log
-          console.log("Comparing addresses:", {
-            eventUser: args?.user,
-            currentUser: userAddress,
-            eventToken: args?.token,
-            expectedToken: USDT_CONTRACT_ADDRESS,
-            userMatch: args?.user?.toLowerCase() === userAddress?.toLowerCase(),
-            tokenMatch: args?.token?.toLowerCase() === USDT_CONTRACT_ADDRESS?.toLowerCase()
+    console.log("✅ New deposits processed:", newDeposits.length);
+    
+    if (newDeposits.length > 0) {
+      setRecentDeposits((prev) => {
+        const combined = [...newDeposits, ...prev];
+        return combined.slice(0, 10); // Keep last 10 deposits
+      });
+      
+      // Refresh balance after deposit
+      setTimeout(() => {
+        refetchUsdtProtocolBalance();
+      }, 1000);
+    }
+  },
+  onError: (error) => {
+    console.error("❌ BalanceDeposited event error:", error);
+  }
+});
+
+// 2. BalanceWithdrawn Event Listener
+useWatchContractEvent({
+  address: TIP_PROTOCOL_ADDRESS,
+  abi: TIP_PROTOCOL_ABI,
+  eventName: "BalanceWithdrawn",
+  chainId: MORPH_HOLESKY_CHAIN_ID,
+  query: { 
+    enabled: isConnected && !!userAddress && !!usdtDecimals
+  },
+  onLogs: (logs) => {
+    console.log("💸 BalanceWithdrawn events received:", logs.length);
+    
+    const newWithdrawals = logs
+      .filter((log) => {
+        const args = log.args as {
+          user?: `0x${string}`;
+          token?: `0x${string}`;
+          amount?: bigint;
+        };
+        
+        const isUserMatch = args?.user?.toLowerCase() === userAddress?.toLowerCase();
+        const isTokenMatch = args?.token?.toLowerCase() === USDT_CONTRACT_ADDRESS?.toLowerCase();
+        
+        console.log("Withdrawal filter check:", {
+          eventUser: args?.user,
+          currentUser: userAddress,
+          eventToken: args?.token,
+          expectedToken: USDT_CONTRACT_ADDRESS,
+          userMatch: isUserMatch,
+          tokenMatch: isTokenMatch
+        });
+        
+        return isUserMatch && isTokenMatch;
+      })
+      .map((log) => {
+        const args = log.args as {
+          user: `0x${string}`;
+          token: `0x${string}`;
+          amount: bigint;
+        };
+        
+        return {
+          type: "withdrawal" as const,
+          amount: formatUnits(args.amount, usdtDecimals!),
+          token: "USDT",
+          hash: log.transactionHash!,
+          timestamp: new Date().toISOString(),
+        };
+      });
+      
+    console.log("✅ New withdrawals processed:", newWithdrawals.length);
+    
+    if (newWithdrawals.length > 0) {
+      setRecentWithdrawals((prev) => {
+        const combined = [...newWithdrawals, ...prev];
+        return combined.slice(0, 10); // Keep last 10 withdrawals
+      });
+      
+      // Refresh balance after withdrawal
+      setTimeout(() => {
+        refetchUsdtProtocolBalance();
+      }, 1000);
+    }
+  },
+  onError: (error) => {
+    console.error("❌ BalanceWithdrawn event error:", error);
+  }
+});
+
+// 3. TipSent Event Listener - MOST IMPORTANT FOR YOUR ISSUE
+useWatchContractEvent({
+  address: TIP_PROTOCOL_ADDRESS,
+  abi: TIP_PROTOCOL_ABI,
+  eventName: "TipSent",
+  chainId: MORPH_HOLESKY_CHAIN_ID,
+  query: { 
+    enabled: isConnected && !!userAddress && !!usdtDecimals
+  },
+  onLogs: (logs) => {
+    console.log("💰 TipSent events received:", logs.length);
+    
+    const newTips = logs
+      .filter((log) => {
+        const args = log.args as {
+          tipper?: `0x${string}`;
+          creator?: `0x${string}`;
+          token?: `0x${string}`;
+          amount?: bigint;
+          message?: string;
+          creatorTwitterHandle?: string;
+        };
+        
+        // Check if this tip involves the current user (either as tipper or receiver)
+        const isUserTipper = args?.tipper?.toLowerCase() === userAddress?.toLowerCase();
+        const isUserCreator = args?.creator?.toLowerCase() === userAddress?.toLowerCase();
+        const isCorrectToken = args?.token?.toLowerCase() === USDT_CONTRACT_ADDRESS?.toLowerCase();
+        
+        console.log("Tip filter check:", {
+          eventTipper: args?.tipper,
+          eventCreator: args?.creator,
+          currentUser: userAddress,
+          eventToken: args?.token,
+          expectedToken: USDT_CONTRACT_ADDRESS,
+          userIsTipper: isUserTipper,
+          userIsCreator: isUserCreator,
+          correctToken: isCorrectToken,
+          shouldInclude: (isUserTipper || isUserCreator) && isCorrectToken
+        });
+        
+        return (isUserTipper || isUserCreator) && isCorrectToken;
+      })
+      .map((log) => {
+        const args = log.args as {
+          tipper: `0x${string}`;
+          creator: `0x${string}`;
+          token: `0x${string}`;
+          amount: bigint;
+          message: string;
+          creatorTwitterHandle: string;
+        };
+        
+        const { tipper, creator, amount, message, creatorTwitterHandle } = args;
+        const timestamp = new Date().toISOString();
+        const formattedAmount = formatUnits(amount, usdtDecimals!);
+        
+        // Determine if user sent or received this tip
+        if (tipper?.toLowerCase() === userAddress?.toLowerCase()) {
+          // User sent this tip
+          console.log("✅ User SENT tip:", {
+            to: creatorTwitterHandle,
+            amount: formattedAmount,
+            message
           });
           
-          // Use case-insensitive comparison for addresses
-          if (!args || 
-              args.user?.toLowerCase() !== userAddress?.toLowerCase() || 
-              args.token?.toLowerCase() !== USDT_CONTRACT_ADDRESS?.toLowerCase()) {
-            console.log("Deposit event filtered out");
-            return null;
-          }
-  
           return {
-            type: "deposit" as const,
-            amount: formatUnits(args.amount, usdtDecimals || 6),
+            type: "sent" as const,
+            user: creatorTwitterHandle.startsWith('@') ? creatorTwitterHandle : `@${creatorTwitterHandle}`,
+            amount: formattedAmount,
             token: "USDT",
+            message: message || "",
             hash: log.transactionHash!,
-            timestamp: new Date().toISOString(),
+            timestamp,
           };
-        })
-        .filter((deposit): deposit is DepositWithdrawalEvent => deposit !== null);
-        
-      console.log("New deposits processed:", newDeposits.length);
-      if (newDeposits.length > 0) {
-        setRecentDeposits((prev) => [...newDeposits, ...prev].slice(0, 3));
-        refetchUsdtProtocolBalance();
-      }
-    },
-    onError: (error) => {
-      console.error("BalanceDeposited event error:", error);
-    }
-  });
-  
-  // 2. Fix the BalanceWithdrawn event listener
-  useWatchContractEvent({
-    address: TIP_PROTOCOL_ADDRESS,
-    abi: TIP_PROTOCOL_ABI,
-    eventName: "BalanceWithdrawn",
-    chainId: MORPH_HOLESKY_CHAIN_ID, // Specify the exact chain
-    query: { 
-      enabled: isConnected && !!userAddress 
-    },
-    onLogs: (logs) => {
-      console.log("BalanceWithdrawn event received:", logs.length, "events"); // Debug log
-      
-      const newWithdrawals = logs
-        .map((log) => {
-          console.log("Raw withdrawal log:", log); // Debug raw log
-          
-          const args = log.args as {
-            user: `0x${string}`;
-            token: `0x${string}`;
-            amount: bigint;
-          };
-          
-          console.log("Processing withdrawal event args:", args);
-          console.log("Comparing addresses:", {
-            eventUser: args?.user,
-            currentUser: userAddress,
-            eventToken: args?.token,
-            expectedToken: USDT_CONTRACT_ADDRESS,
-            userMatch: args?.user?.toLowerCase() === userAddress?.toLowerCase(),
-            tokenMatch: args?.token?.toLowerCase() === USDT_CONTRACT_ADDRESS?.toLowerCase()
+        } else if (creator?.toLowerCase() === userAddress?.toLowerCase()) {
+          // User received this tip
+          console.log("✅ User RECEIVED tip:", {
+            from: tipper,
+            amount: formattedAmount,
+            message
           });
           
-          // Use case-insensitive comparison for addresses
-          if (!args || 
-              args.user?.toLowerCase() !== userAddress?.toLowerCase() || 
-              args.token?.toLowerCase() !== USDT_CONTRACT_ADDRESS?.toLowerCase()) {
-            console.log("Withdrawal event filtered out");
-            return null;
-          }
-  
           return {
-            type: "withdrawal" as const,
-            amount: formatUnits(args.amount, usdtDecimals || 6),
+            type: "received" as const,
+            user: `${tipper.slice(0, 6)}...${tipper.slice(-4)}`,
+            amount: formattedAmount,
             token: "USDT",
+            message: message || "",
             hash: log.transactionHash!,
-            timestamp: new Date().toISOString(),
+            timestamp,
           };
-        })
-        .filter((withdrawal): withdrawal is DepositWithdrawalEvent => withdrawal !== null);
+        }
         
-      console.log("New withdrawals processed:", newWithdrawals.length);
-      if (newWithdrawals.length > 0) {
-        setRecentWithdrawals((prev) => [...newWithdrawals, ...prev].slice(0, 3));
-        refetchUsdtProtocolBalance();
-      }
-    },
-    onError: (error) => {
-      console.error("BalanceWithdrawn event error:", error);
-    }
-  });
-  
-  // 3. Fix the TipSent event listener
-  useWatchContractEvent({
-    address: TIP_PROTOCOL_ADDRESS,
-    abi: TIP_PROTOCOL_ABI,
-    eventName: "TipSent",
-    chainId: MORPH_HOLESKY_CHAIN_ID, // Specify the exact chain
-    query: { 
-      enabled: isConnected && !!userAddress 
-    },
-    onLogs: (logs) => {
-      console.log("TipSent event received:", logs.length, "events"); // Debug log
+        return null;
+      })
+      .filter((tip): tip is TipEvent => tip !== null);
       
-      const newTips = logs
-        .map((log) => {
-          console.log("Raw tip log:", log); // Debug raw log
-          
-          const args = log.args as {
-            tipper: `0x${string}`;
-            creator: `0x${string}`;
-            token: `0x${string}`;
-            amount: bigint;
-            message: string;
-            creatorTwitterHandle: string;
-          };
-          
-          console.log("Processing tip event args:", args);
-          
-          if (!args || args.token?.toLowerCase() !== USDT_CONTRACT_ADDRESS?.toLowerCase()) {
-            console.log("Tip event filtered out - wrong token");
-            return null;
-          }
-  
-          const { tipper, creator, amount, message, creatorTwitterHandle } = args;
-          const timestamp = new Date().toISOString();
-  
-          // Check if user is the tipper
-          if (tipper?.toLowerCase() === userAddress?.toLowerCase()) {
-            return {
-              type: "sent" as const,
-              user: `@${creatorTwitterHandle}`,
-              amount: formatUnits(amount, usdtDecimals || 6),
-              token: "USDT",
-              message,
-              hash: log.transactionHash!,
-              timestamp,
-            };
-          } 
-          // Check if user is the creator receiving the tip
-          else if (creator?.toLowerCase() === userAddress?.toLowerCase()) {
-            return {
-              type: "received" as const,
-              user: `(Tipper: ${tipper.slice(0, 6)}...${tipper.slice(-4)})`,
-              amount: formatUnits(amount, usdtDecimals || 6),
-              token: "USDT",
-              message,
-              hash: log.transactionHash!,
-              timestamp,
-            };
-          }
-          
-          console.log("Tip event not for current user");
-          return null;
-        })
-        .filter((tip): tip is TipEvent => tip !== null);
-        
-      console.log("New tips processed:", newTips.length);
-      if (newTips.length > 0) {
-        setRecentTips((prev) => [...newTips, ...prev].slice(0, 5));
+    console.log("✅ New tips processed:", newTips.length);
+    
+    if (newTips.length > 0) {
+      setRecentTips((prev) => {
+        const combined = [...newTips, ...prev];
+        console.log("🔄 Updating tips state. Previous:", prev.length, "New:", newTips.length, "Combined:", combined.length);
+        return combined.slice(0, 20); // Keep last 20 tips
+      });
+      
+      // Refresh all data after tip
+      setTimeout(() => {
+        console.log("🔄 Refreshing all data after tip event...");
         refetchAllData();
-      }
-    },
-    onError: (error) => {
-      console.error("TipSent event error:", error);
+      }, 2000);
+      
+      // Show success toast for sent tips
+      newTips.forEach(tip => {
+        if (tip.type === "sent") {
+          toast.success(`Tip sent to ${tip.user}! Amount: $${tip.amount} USDT`);
+        } else if (tip.type === "received") {
+          toast.success(`Tip received from ${tip.user}! Amount: $${tip.amount} USDT`);
+        }
+      });
     }
-  });
-  
+  },
+  onError: (error) => {
+    console.error("❌ TipSent event error:", error);
+  }
+});
+
+// Add a debug function to manually check recent tips state
+const debugRecentTips = () => {
+  console.group("🐛 RECENT TIPS DEBUG");
+  console.log("Recent Tips State:", recentTips);
+  console.log("Recent Deposits State:", recentDeposits);
+  console.log("Recent Withdrawals State:", recentWithdrawals);
+  console.log("User Address:", userAddress);
+  console.log("USDT Decimals:", usdtDecimals);
+  console.log("Is Connected:", isConnected);
+  console.groupEnd();
+};
+
 
   const isLoading = isTxLoading || isConfirming || isTipProtocolPending || isERC20Pending;
 
